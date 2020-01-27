@@ -48,7 +48,7 @@ LIDARLite::LIDARLite(){}
   lidarliteAddress: Default 0x62. Fill in new address here if changed. See
     operating manual for instructions.
 ------------------------------------------------------------------------------*/
-void LIDARLite::begin(int configuration, bool fasti2c, char lidarliteAddress)
+bool LIDARLite::begin(int configuration, bool fasti2c, char lidarliteAddress)
 {
   Wire.begin(); // Start I2C
   if(fasti2c)
@@ -59,7 +59,7 @@ void LIDARLite::begin(int configuration, bool fasti2c, char lidarliteAddress)
       TWBR = ((F_CPU / 400000UL) - 16) / 2; // Set I2C frequency to 400kHz
     #endif
   }
-  configure(configuration, lidarliteAddress); // Configuration settings
+  return configure(configuration, lidarliteAddress); // Configuration settings
 } /* LIDARLite::begin */
 
 /*------------------------------------------------------------------------------
@@ -83,44 +83,50 @@ void LIDARLite::begin(int configuration, bool fasti2c, char lidarliteAddress)
   lidarliteAddress: Default 0x62. Fill in new address here if changed. See
     operating manual for instructions.
 ------------------------------------------------------------------------------*/
-void LIDARLite::configure(int configuration, char lidarliteAddress)
+bool LIDARLite::configure(int configuration, char lidarliteAddress)
 {
   switch (configuration)
   {
     case 0: // Default mode, balanced performance
-      write(0x02,0x80,lidarliteAddress); // Default
-      write(0x04,0x08,lidarliteAddress); // Default
-      write(0x1c,0x00,lidarliteAddress); // Default
+      return
+        write(0x02,0x80,lidarliteAddress) && // Default
+        write(0x04,0x08,lidarliteAddress) && // Default
+        write(0x1c,0x00,lidarliteAddress);   // Default
     break;
 
     case 1: // Short range, high speed
-      write(0x02,0x1d,lidarliteAddress);
-      write(0x04,0x08,lidarliteAddress); // Default
-      write(0x1c,0x00,lidarliteAddress); // Default
+      return
+        write(0x02,0x1d,lidarliteAddress) &&
+        write(0x04,0x08,lidarliteAddress) && // Default
+        write(0x1c,0x00,lidarliteAddress);   // Default
     break;
 
     case 2: // Default range, higher speed short range
-      write(0x02,0x80,lidarliteAddress); // Default
-      write(0x04,0x00,lidarliteAddress);
-      write(0x1c,0x00,lidarliteAddress); // Default
+      return
+        write(0x02,0x80,lidarliteAddress) && // Default
+        write(0x04,0x00,lidarliteAddress) &&
+        write(0x1c,0x00,lidarliteAddress);   // Default
     break;
 
     case 3: // Maximum range
-      write(0x02,0xff,lidarliteAddress);
-      write(0x04,0x08,lidarliteAddress); // Default
-      write(0x1c,0x00,lidarliteAddress); // Default
+      return
+        write(0x02,0xff,lidarliteAddress) &&
+        write(0x04,0x08,lidarliteAddress) && // Default
+        write(0x1c,0x00,lidarliteAddress); // Default
     break;
 
     case 4: // High sensitivity detection, high erroneous measurements
-      write(0x02,0x80,lidarliteAddress); // Default
-      write(0x04,0x08,lidarliteAddress); // Default
-      write(0x1c,0x80,lidarliteAddress);
+      return
+        write(0x02,0x80,lidarliteAddress) && // Default
+        write(0x04,0x08,lidarliteAddress) && // Default
+        write(0x1c,0x80,lidarliteAddress);
     break;
 
     case 5: // Low sensitivity detection, low erroneous measurements
-      write(0x02,0x80,lidarliteAddress); // Default
-      write(0x04,0x08,lidarliteAddress); // Default
-      write(0x1c,0xb0,lidarliteAddress);
+      return
+        write(0x02,0x80,lidarliteAddress) && // Default
+        write(0x04,0x08,lidarliteAddress) && // Default
+        write(0x1c,0xb0,lidarliteAddress);
     break;
   }
 } /* LIDARLite::configure */
@@ -138,29 +144,32 @@ void LIDARLite::configure(int configuration, char lidarliteAddress)
   lidarliteAddress: Default 0x62. Fill in new address here if changed. See
     operating manual for instructions.
 ------------------------------------------------------------------------------*/
-void LIDARLite::setI2Caddr(char newAddress, char disableDefault, char lidarliteAddress)
+bool LIDARLite::setI2Caddr(char newAddress, char disableDefault, char lidarliteAddress)
 {
   byte dataBytes[2];
 
   // Read UNIT_ID serial number bytes and write them into I2C_ID byte locations
-  read ((0x16 | 0x80), 2, dataBytes, false, lidarliteAddress);
-  write(0x18, dataBytes[0], lidarliteAddress);
-  write(0x19, dataBytes[1], lidarliteAddress);
+  if (
+    !read ((0x16 | 0x80), 2, dataBytes, false, lidarliteAddress) ||
+    !write(0x18, dataBytes[0], lidarliteAddress) ||
+    !write(0x19, dataBytes[1], lidarliteAddress)
+  ) return false;
 
   // Write the new I2C device address to registers
   dataBytes[0] = newAddress;
-  write(0x1a, dataBytes[0], lidarliteAddress);
+  if (!write(0x1a, dataBytes[0], lidarliteAddress)) return false;
 
   // Enable the new I2C device address using the default I2C device address
   dataBytes[0] = 0;
-  write(0x1e, dataBytes[0], lidarliteAddress);
+  if (!write(0x1e, dataBytes[0], lidarliteAddress)) return false;
 
   // If desired, disable default I2C device address (using the new I2C device address)
   if (disableDefault)
   {
     dataBytes[0] = (1 << 3); // set bit to disable default address
-    write(0x1e, dataBytes[0], newAddress);
+    if (!write(0x1e, dataBytes[0], newAddress)) return false;
   }
+  return true;
 } /* LIDARLite::setI2Caddr */
 
 /*------------------------------------------------------------------------------
@@ -174,9 +183,9 @@ void LIDARLite::setI2Caddr(char newAddress, char disableDefault, char lidarliteA
   lidarliteAddress: Default 0x62. Fill in new address here if changed. See
     operating manual for instructions.
 ------------------------------------------------------------------------------*/
-void LIDARLite::reset(char lidarliteAddress)
+bool LIDARLite::reset(char lidarliteAddress)
 {
-  write(0x00,0x00,lidarliteAddress);
+  return write(0x00,0x00,lidarliteAddress);
 } /* LIDARLite::reset */
 
 /*------------------------------------------------------------------------------
@@ -206,23 +215,30 @@ void LIDARLite::reset(char lidarliteAddress)
 ------------------------------------------------------------------------------*/
 int LIDARLite::distance(bool biasCorrection, char lidarliteAddress)
 {
+  bool result;
   if(biasCorrection)
   {
     // Take acquisition & correlation processing with receiver bias correction
-    write(0x00,0x04,lidarliteAddress);
+    result = write(0x00,0x04,lidarliteAddress);
   }
   else
   {
     // Take acquisition & correlation processing without receiver bias correction
-    write(0x00,0x03,lidarliteAddress);
+    result = write(0x00,0x03,lidarliteAddress);
   }
+  if (!result) return -1;
   // Array to store high and low bytes of distance
   byte distanceArray[2];
   // Read two bytes from register 0x8f (autoincrement for reading 0x0f and 0x10)
-  read(0x8f,2,distanceArray,true,lidarliteAddress);
-  // Shift high byte and add to low byte
-  int distance = (distanceArray[0] << 8) + distanceArray[1];
-  return(distance);
+  if (read(0x8f,2,distanceArray,true,lidarliteAddress)) {
+    // Shift high byte and add to low byte
+    int distance = (distanceArray[0] << 8) + distanceArray[1];
+    return(distance);
+  }
+  else
+  {
+    return -1;
+  }
 } /* LIDARLite::distance */
 
 /*------------------------------------------------------------------------------
@@ -237,7 +253,7 @@ int LIDARLite::distance(bool biasCorrection, char lidarliteAddress)
   lidarliteAddress: Default 0x62. Fill in new address here if changed. See
     operating manual for instructions.
 ------------------------------------------------------------------------------*/
-void LIDARLite::write(char myAddress, char myValue, char lidarliteAddress)
+bool LIDARLite::write(char myAddress, char myValue, char lidarliteAddress)
 {
   Wire.beginTransmission((int)lidarliteAddress);
   Wire.write((int)myAddress); // Set register for write
@@ -245,12 +261,10 @@ void LIDARLite::write(char myAddress, char myValue, char lidarliteAddress)
 
   // A nack means the device is not responding, report the error over serial
   int nackCatcher = Wire.endTransmission();
-  if(nackCatcher != 0)
-  {
-    Serial.println("> nack");
-  }
+  if(nackCatcher != 0) return false;
 
   delay(1); // 1 ms delay for robustness with successive reads and writes
+  return true;
 } /* LIDARLite::write */
 
 /*------------------------------------------------------------------------------
@@ -269,7 +283,7 @@ void LIDARLite::write(char myAddress, char myValue, char lidarliteAddress)
   monitorBusyFlag: if true, the routine will repeatedly read the status
     register until the busy flag (LSB) is 0.
 ------------------------------------------------------------------------------*/
-void LIDARLite::read(char myAddress, int numOfBytes, byte arrayToSave[2], bool monitorBusyFlag, char lidarliteAddress)
+bool LIDARLite::read(char myAddress, int numOfBytes, byte arrayToSave[2], bool monitorBusyFlag, char lidarliteAddress)
 {
   int busyFlag = 0; // busyFlag monitors when the device is done with a measurement
   if(monitorBusyFlag)
@@ -286,10 +300,7 @@ void LIDARLite::read(char myAddress, int numOfBytes, byte arrayToSave[2], bool m
 
     // A nack means the device is not responding, report the error over serial
     int nackCatcher = Wire.endTransmission();
-    if(nackCatcher != 0)
-    {
-      Serial.println("> nack");
-    }
+    if(nackCatcher != 0) return false;
 
     Wire.requestFrom((int)lidarliteAddress,1); // Read register 0x01
     busyFlag = bitRead(Wire.read(),0); // Assign the LSB of the status register to busyFlag
@@ -311,10 +322,7 @@ void LIDARLite::read(char myAddress, int numOfBytes, byte arrayToSave[2], bool m
 
     // A nack means the device is not responding, report the error over serial
     int nackCatcher = Wire.endTransmission();
-    if(nackCatcher != 0)
-    {
-      Serial.println("> nack");
-    }
+    if(nackCatcher != 0) return false;
 
     // Perform read of 1 or 2 bytes, save in arrayToSave
     Wire.requestFrom((int)lidarliteAddress, numOfBytes);
@@ -334,8 +342,10 @@ void LIDARLite::read(char myAddress, int numOfBytes, byte arrayToSave[2], bool m
   {
     bailout:
       busyCounter = 0;
-      Serial.println("> read failed");
+      return false;
   }
+
+  return true;
 } /* LIDARLite::read */
 
 /*------------------------------------------------------------------------------
